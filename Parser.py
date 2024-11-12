@@ -32,8 +32,10 @@ class Lexer:
     def number(self):
         result = ''
         # TODO: Update this code to handle floating-point numbers 
-
-        if is_float:
+        while self.current_char is not None and (self.current_char.isdigit() or self.current_char == '.'):
+            result += self.current_char
+            self.advance()
+        if '.' in result:
             return ('FNUMBER', float(result))
         else:
             return ('NUMBER', int(result))
@@ -100,6 +102,12 @@ class Lexer:
                 self.advance()
                 return ('COLON', ':')
             # TODO: Implement handling for '{' and '}' tokens here (see `tokens.txt` for exact names)
+            if self.current_char == '{':
+                self.advance()
+                return ('LBRACE', '{')
+            if self.current_char == '}':
+                self.advance()
+                return ('RBRACE', '}')
             if self.current_char == '\n':
                 self.advance()
                 continue
@@ -138,37 +146,45 @@ class Parser:
         if self.tokens:
             self.current_token = self.tokens.pop(0)
 
-    # TODO: Implement logic to enter a new scope, add it to symbol table, and update `scope_stack`
+    # DONE: Implement logic to enter a new scope, add it to symbol table, and update `scope_stack`
     def enter_scope(self):
-        pass
+        #Creates a new scope in the symbol table
+        self.symbol_table.update({f"{self.current_token}":{}})
+        self.scope_stack.append(self.current_token)
 
-    # TODO: Implement logic to exit the current scope, removing it from `scope_stack`
+    # DONE: Implement logic to exit the current scope, removing it from `scope_stack`
     def exit_scope(self):
-        pass
+        self.scope_stack.pop()
 
     # Return the current scope name
     def current_scope(self):
         return self.scope_stack[-1]
 
-    # TODO: Check if a variable is already declared in the current scope; if so, log an error
+    # DONE: Check if a variable is already declared in the current scope; if so, log an error
     def checkVarDeclared(self, identifier):
-        self.error(f"Variable {identifier} has already been declared in the current scope")
+        if identifier in self.symbol_table[self.current_scope()]:
+            self.error(f"Variable {identifier} has already been declared in the current scope")
 
-    # TODO: Check if a variable is declared in any accessible scope; if not, log an error
+    # DONE: Check if a variable is declared in any accessible scope; if not, log an error
     def checkVarUse(self, identifier):
-        self.error(f"Variable {identifier} has not been declared in the current or any enclosing scopes")
+        if identifier not in self.symbol_table[self.current_scope()]:
+            self.error(f"Variable {identifier} has not been declared in the current or any enclosing scopes")
 
     # TODO: Check type mismatch between two entities; log an error if they do not match
     def checkTypeMatch2(self, vType, eType, var, exp):
-        self.error(f"Type Mismatch between {vType} and {eType}")
+        if vType != eType:
+            self.error(f"Type Mismatch between {vType} and {eType}")
 
     # TODO: Implement logic to add a variable to the current scope in `symbol_table`
     def add_variable(self, name, var_type):
-        pass
+        self.symbol_table[self.current_scope()].update({name: var_type})
 
     # TODO: Retrieve the variable type from `symbol_table` if it exists
     def get_variable_type(self, name):
-        return None
+        if name in self.symbol_table[self.current_scope()]:
+            return self.symbol_table[self.current_scope()][name]
+        else:
+            return None
 
     def parse(self):
         return self.program()
@@ -181,6 +197,8 @@ class Parser:
 
     # TODO: Modify the `statement` function to dispatch to declare statement
     def statement(self):
+        if self.current_token[0] in ['INT', 'FLOAT']:
+            return self.decl_stmt()
         if self.current_token[0] == 'IDENTIFIER':
             if self.peek() == 'EQUALS':
                 return self.assign_stmt()
@@ -204,6 +222,15 @@ class Parser:
         float y = 3.5
         TODO: Implement logic to parse type, identifier, and initialization expression and also handle type checking
         """
+        var_type = self.current_token[1]
+        self.advance()
+        var_name = self.current_token[1]
+        self.advance()
+        self.checkVarDeclared(var_name)
+        self.add_variable(var_name, var_type)
+        self.expect('EQUALS')
+        self.advance()
+        expression = self.expression()
         return AST.Declaration(var_type, var_name, expression)
 
     # TODO: Parse assignment statements, handle type checking
@@ -215,6 +242,12 @@ class Parser:
         x = y + 5
         TODO: Implement logic to handle assignment, including type checking.
         """
+        var_name = self.current_token[1]
+        self.advance()
+        self.checkVarUse(var_name)
+        self.expect('EQUALS')
+        self.advance()
+        expression = self.expression()
         return AST.Assignment(var_name, expression)
 
     # TODO: Implement the logic to parse the if condition and blocks of code
@@ -230,6 +263,19 @@ class Parser:
         }
         TODO: Implement the logic to parse the if condition and blocks of code.
         """
+        self.advance()
+        condition = self.expression()
+        self.expect('LBRACE')
+        self.enter_scope()
+        then_block = self.block()
+        self.exit_scope()
+        else_block = None
+        if self.current_token[0] == 'ELSE':
+            self.advance()
+            self.expect('LBRACE')
+            self.enter_scope()
+            else_block = self.block()
+            self.exit_scope()
         return AST.IfStatement(condition, then_block, else_block)
 
     # TODO: Implement the logic to parse while loops with a condition and a block of statements
@@ -242,6 +288,12 @@ class Parser:
         }
         TODO: Implement the logic to parse while loops with a condition and a block of statements.
         """
+        self.advance()
+        condition = self.expression()
+        self.expect('LBRACE')
+        self.enter_scope()
+        block = self.block()
+        self.exit_scope()
         return AST.WhileStatement(condition, block)
 
     # TODO: Implement logic to capture multiple statements as part of a block
@@ -255,6 +307,10 @@ class Parser:
         
         TODO: Implement logic to capture multiple statements as part of a block.
         """
+        statements = []
+        while self.current_token[0] != 'RBRACE':
+            statements.append(self.statement())
+        self.expect('RBRACE')
         return AST.Block(statements)
 
     # TODO: Implement logic to parse binary operations (e.g., addition, subtraction) with correct precedence and type checking
@@ -283,6 +339,15 @@ class Parser:
         x == 5
         TODO: Implement parsing for boolean expressions and check for type compatibility.
         """
+        left = self.expression()
+        if self.current_token[0] in ['EQ', 'NEQ', 'LESS', 'GREATER']:
+            op = self.current_token[0]
+            self.advance()
+            right = self.expression()
+            self.checkTypeMatch2(left.value_type, right.value_type, left, right)
+            return AST.BinaryOperation(left, op, right, value_type='bool')
+        else:
+            return left
         
 
     # TODO: Implement parsing for multiplication and division and check for type compatibility
@@ -297,12 +362,18 @@ class Parser:
     def factor(self):
         if self.current_token[0] == 'NUMBER':
             # handle int
+            num = self.current_token[1]
             return AST.Factor(num, 'int')
         elif self.current_token[0] == 'FNUMBER':
             # handle float
+            num = self.current_token[1]
             return AST.Factor(num, 'float')
         elif self.current_token[0] == 'IDENTIFIER':
             # TODO: Ensure that you parse the identifier correctly, retrieve its type from the symbol table, and check if it has been declared in the current or any enclosing scopes.
+            var_name = self.current_token[1]
+            var_type = self.get_variable_type(var_name)
+            self.checkVarUse(var_name)
+            self.advance()
             return AST.Factor(var_name, var_type)
         elif self.current_token[0] == 'LPAREN':
             self.advance()
