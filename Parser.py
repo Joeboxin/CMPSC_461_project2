@@ -149,8 +149,11 @@ class Parser:
     # DONE: Implement logic to enter a new scope, add it to symbol table, and update `scope_stack`
     def enter_scope(self):
         #Creates a new scope in the symbol table
-        self.symbol_table.update({f"{self.current_token}":{}})
-        self.scope_stack.append(self.current_token)
+        new_scope = f"scope{self.scope_counter}"
+        self.symbol_table[new_scope] = {}
+        self.scope_stack.append(new_scope)
+        self.scope_counter += 1
+        
 
     # DONE: Implement logic to exit the current scope, removing it from `scope_stack`
     def exit_scope(self):
@@ -172,6 +175,8 @@ class Parser:
 
     # TODO: Check type mismatch between two entities; log an error if they do not match
     def checkTypeMatch2(self, vType, eType, var, exp):
+        if vType is None or eType is None:
+            return
         if vType != eType:
             self.error(f"Type Mismatch between {vType} and {eType}")
 
@@ -181,10 +186,10 @@ class Parser:
 
     # TODO: Retrieve the variable type from `symbol_table` if it exists
     def get_variable_type(self, name):
-        if name in self.symbol_table[self.current_scope()]:
-            return self.symbol_table[self.current_scope()][name]
-        else:
-            return None
+        for scope in self.scope_stack[::-1]:
+            if name in self.symbol_table[scope]:
+                return self.symbol_table[scope][name]
+        return None
 
     def parse(self):
         return self.program()
@@ -231,6 +236,7 @@ class Parser:
         self.expect('EQUALS')
         self.advance()
         expression = self.expression()
+        self.checkTypeMatch2(var_type, expression.value_type, var_name, expression)
         return AST.Declaration(var_type, var_name, expression)
 
     # TODO: Parse assignment statements, handle type checking
@@ -248,6 +254,7 @@ class Parser:
         self.expect('EQUALS')
         self.advance()
         expression = self.expression()
+        self.checkTypeMatch2(self.get_variable_type(var_name), expression.value_type, var_name, expression)
         return AST.Assignment(var_name, expression)
 
     # TODO: Implement the logic to parse the if condition and blocks of code
@@ -358,15 +365,25 @@ class Parser:
         x * y / z
         TODO: Implement parsing for multiplication and division and check for type compatibility.
         """
+        left = self.factor()
+        while self.current_token[0] in ['MULTIPLY', 'DIVIDE']:
+            op = self.current_token[0]
+            self.advance()
+            right = self.factor()
+            self.checkTypeMatch2(left.value_type, right.value_type, left, right)
+            left = AST.BinaryOperation(left, op, right, value_type=left.value_type)
+        return left
         
     def factor(self):
         if self.current_token[0] == 'NUMBER':
             # handle int
             num = self.current_token[1]
+            #self.advance()
             return AST.Factor(num, 'int')
         elif self.current_token[0] == 'FNUMBER':
             # handle float
             num = self.current_token[1]
+            #self.advance()
             return AST.Factor(num, 'float')
         elif self.current_token[0] == 'IDENTIFIER':
             # TODO: Ensure that you parse the identifier correctly, retrieve its type from the symbol table, and check if it has been declared in the current or any enclosing scopes.
