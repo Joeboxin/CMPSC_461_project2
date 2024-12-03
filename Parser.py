@@ -171,19 +171,22 @@ class Parser:
 
     # DONE: Check if a variable is declared in any accessible scope; if not, log an error
     def checkVarUse(self, identifier):
-        if identifier not in self.symbol_table[self.current_scope()]:
-            self.error(f"Variable {identifier} has not been declared in the current or any enclosing scopes")
+        for scope in self.scope_stack[::-1]:
+            if identifier in self.symbol_table[scope]:
+                return
+        self.error(f"Variable {identifier} has not been declared in the current or any enclosing scopes")
 
     # TODO: Check type mismatch between two entities; log an error if they do not match
     def checkTypeMatch2(self, vType, eType, var, exp):
         if vType is None or eType is None:
             return
         if vType != eType:
-            self.error(f"Type Mismatch between {vType} and {eType}")
+            if sorted([vType, eType]) == ['float', 'int']:
+                self.error(f"Type Mismatch between {vType} and {eType}")
 
     # TODO: Implement logic to add a variable to the current scope in `symbol_table`
     def add_variable(self, name, var_type):
-        self.symbol_table[self.current_scope()].update({name: var_type})
+        self.symbol_table[self.current_scope()][name] = var_type
 
     # TODO: Retrieve the variable type from `symbol_table` if it exists
     def get_variable_type(self, name):
@@ -234,12 +237,13 @@ class Parser:
         self.advance()
         var_name = self.current_token[1]
         self.advance()
+
         self.checkVarDeclared(var_name)
-        self.add_variable(var_name, var_type)
         self.expect('EQUALS')
         expression = self.expression()
+
         self.checkTypeMatch2(var_type, expression.value_type, var_name, expression)
-        self.advance()
+        self.add_variable(var_name, var_type)
         return AST.Declaration(var_type, var_name, expression)
 
     # TODO: Parse assignment statements, handle type checking
@@ -257,7 +261,6 @@ class Parser:
         self.checkVarUse(var_name)
         self.expect('EQUALS')
         print(f"current_token in assign_stmt after expect: {self.current_token}")
-        self.advance()
         expression = self.expression()
         self.checkTypeMatch2(self.get_variable_type(var_name), expression.value_type, var_name, expression)
         return AST.Assignment(var_name, expression)
@@ -277,10 +280,11 @@ class Parser:
         """
         self.advance()
         condition = self.boolean_expression()
-        self.advance()
+        print(f"condition: {condition}")
         self.expect('LBRACE')
         self.enter_scope()
         then_block = self.block()
+        print(f"then_block: {then_block}")
         self.exit_scope()
         else_block = None
         if self.current_token[0] == 'ELSE':
@@ -302,7 +306,7 @@ class Parser:
         TODO: Implement the logic to parse while loops with a condition and a block of statements.
         """
         self.advance()
-        condition = self.expression()
+        condition = self.boolean_expression()
         self.expect('LBRACE')
         self.enter_scope()
         block = self.block()
@@ -382,13 +386,12 @@ class Parser:
     def factor(self):
         print(f"current_token in factor: {self.current_token}")
         if self.current_token[0] == 'NUMBER':
-            # handle int
             num = self.current_token[1]
-            #self.advance()
+            self.advance()
             return AST.Factor(num, 'int')
         elif self.current_token[0] == 'FNUMBER':
-            # handle float
             num = self.current_token[1]
+            self.advance()
             return AST.Factor(num, 'float')
         elif self.current_token[0] == 'IDENTIFIER':
             # TODO: Ensure that you parse the identifier correctly, retrieve its type from the symbol table, and check if it has been declared in the current or any enclosing scopes.
