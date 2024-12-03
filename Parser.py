@@ -123,7 +123,6 @@ class Lexer:
             self.tokens.append(token)
             if token[0] == 'EOF':
                 break
-        print(self.tokens)
         return self.tokens
 
 
@@ -206,7 +205,6 @@ class Parser:
 
     # TODO: Modify the `statement` function to dispatch to declare statement
     def statement(self):
-        print(f"current_token in statement: {self.current_token}")
         if self.current_token[0] in ['INT', 'FLOAT']:
             return self.decl_stmt()
         if self.current_token[0] == 'IDENTIFIER':
@@ -255,12 +253,10 @@ class Parser:
         x = y + 5
         TODO: Implement logic to handle assignment, including type checking.
         """
-        print(f"current_token in assign_stmt: {self.current_token}")
         var_name = self.current_token[1]
         self.advance()
         self.checkVarUse(var_name)
         self.expect('EQUALS')
-        print(f"current_token in assign_stmt after expect: {self.current_token}")
         expression = self.expression()
         self.checkTypeMatch2(self.get_variable_type(var_name), expression.value_type, var_name, expression)
         return AST.Assignment(var_name, expression)
@@ -280,11 +276,9 @@ class Parser:
         """
         self.advance()
         condition = self.boolean_expression()
-        print(f"condition: {condition}")
         self.expect('LBRACE')
         self.enter_scope()
         then_block = self.block()
-        print(f"then_block: {then_block}")
         self.exit_scope()
         else_block = None
         if self.current_token[0] == 'ELSE':
@@ -384,7 +378,6 @@ class Parser:
         return left
         
     def factor(self):
-        print(f"current_token in factor: {self.current_token}")
         if self.current_token[0] == 'NUMBER':
             num = self.current_token[1]
             self.advance()
